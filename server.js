@@ -28,7 +28,7 @@ require("firebase/auth");
 const db = admin.firestore();
 
 app.use(cors({
-    origin: 'http://localhost:3000'
+    origin: 'https://mathletica-9a3d0.web.app/'
 }));
   
 app.use(function(req, res, next) {
