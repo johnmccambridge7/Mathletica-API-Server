@@ -30,6 +30,10 @@ const db = admin.firestore();
 app.use(cors({
     origin: 'https://mathletica-9a3d0.web.app'
 }));
+
+// Points not updating
+// Favicon Broken
+// Session Summary Numbers strange
   
 app.use(function(req, res, next) {
     res.header("Access-Control-Allow-Origin", "*");
@@ -62,7 +66,7 @@ function Points(difficulty, obtainedMarks, averageMarks, timeTaken, timeAllowed)
 
     const worth = (1/averageMarks) * (difficulty * obtainedMarks);
     // const timeBonus = (1 - timeTaken/timeAllowed) * worth; // maybe not add this in
-    return worth;
+    return worth.toFixed(2);
 }
 
 router.post('/login', function (req, res) {
