@@ -66,7 +66,7 @@ function Points(difficulty, obtainedMarks, averageMarks, timeTaken, timeAllowed)
 
     const worth = (1/averageMarks) * (difficulty * obtainedMarks);
     // const timeBonus = (1 - timeTaken/timeAllowed) * worth; // maybe not add this in
-    return worth;
+    return parseInt(worth);
 }
 
 router.post('/login', function (req, res) {
@@ -198,6 +198,8 @@ router.post('/getSession', async function(req, res) {
 
 router.post('/getSessions', async function(req, res) {
     const uid = req.body.uid;
+
+    
     const sessionRef = db.collection('sessions');
     const sessionSnapshot = await sessionRef.where('uid', '==', uid).orderBy('date', 'desc').get();
     const sessions = [];
@@ -331,6 +333,10 @@ router.post('/question', async function(req, res) {
                     }).catch((e) => { console.log(e) });
 
                     const points = Points(answer.difficulty, answer.marks, currentAvg);
+
+                    console.log('Marks: ', answer);
+                    console.log('Stats: ', answer.difficulty, answer.marks, currentAvg);
+                    console.log('Points Earned: ', points);
 
                     userRef.update({ points: admin.firestore.FieldValue.increment(points) }).catch((e) => { console.log(e) });
                 });
