@@ -1,0 +1,13 @@
+{
+    "name": "node-api",
+    "main": "server.js",
+    "dependencies": {
+        "body-parser": "~1.0.1",
+        "cors": "^2.8.5",
+        "express": "~4.0.0",
+        "firebase": "^8.1.1",
+        "firebase-admin": "^9.4.1",
+        "firebase-tools": "^9.0.1",
+        "mongoose": "~3.6.13"
+    }
+}
