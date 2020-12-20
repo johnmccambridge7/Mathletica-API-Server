@@ -1,0 +1,13 @@
+{
+    "type": "service_account",
+    "project_id": "mathletica-9a3d0",
+    "private_key_id": "ee63c766199de6b20bfee5a13b355ab9f130d575",
+    "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCpV15R8sqi5zNy\niGXW2t8sJdUKB6AQa7Suxevqe/IyI5MNSYR2puBWmaFiI/eXlEANo9KE5sNec4Ci\nxbqsI50M+KVmnja2L0TbBK6xurVZ+PD6oBnXbm8A4IIjtTiSGA7MYchW5bBsLtO+\nwnjXtRd+ERpwGc6QZ9VrdIDikSNClBUQh6T971OiILEiVZbhupvuPcaGC8RTc6sB\nPZUdLKK8II9su8rJ9xvSdx6I1Ikzpwq44AVCRfMiH7oNM+TPI7gc4lDCJSpof1+p\nhE9R1or52Z2YDePOJnzqHiaYJaR5MMqlUOlndiTu7WwY3K+875rwx85Mdar6+Rtx\n1Nfhk5IhAgMBAAECggEADBtceXRny2THN1mMGmPUj9X2mLx506K3rMUmvEF3S+Fi\nOpF2gHsmz9o1AQy8P2CQgckkHG9ZKXANktWbJoJ3UH2YabFHDRhtDlGT4c4M+C1F\noU1/+3iARCpI85+Zt0w0BqW5ColqZxmj9t/1fsqKLu+vGbOmoolh50hRjKE+yZwp\n7P9IjxbHlljr/T1LSPyhOG8teGG5HWMlMERmfNVVRAoOnS5Tq1iWtQjEbhp20nFX\nmI3NOOWZXs1vC0NoR3xAogkvnszN9m6dl14w6QI3DnKkidz4inhGVGTLnLDnYQtn\n5bVYpOCSHYwoQzWT+q9izvR3HP9eD8K5Lzi5K16sSQKBgQDTKimRWWRmankJ7MyX\nE4htKvlfd9xxgiAp1MQMJ5qxCJZeDxypmIQEbbcHSxEGfvKUgHDVN409eQ5JW9hf\n2K3TlDt8r5oRHx2dZ5FJTMbjbsxzbLzkg0AUsxZq3NfX29rXj3bEjqXIV3v3xtkZ\npPSqix3Vhj2pCj7WlC2dYMiczQKBgQDNS+X0esEk1KAfSqn/mU/5wv/kt2lLDaF+\nh1SkLs/QkjicqLkQHBmQ+w6iBoEoj30H4y3vuUSelPH6VszHYSMHn0D6J6oeN+TU\nsskvGHpGOfWy86Qh04BwUb2eT4FDXsLe8g1Du1NheZ+981ZgugM3g/HsrJ9ge2g8\nLn5BysCKpQKBgHbhpcVOrld6WepchlIHjSboqrw0nsbIm5LxVe4B3fUNAJqzp09T\nrf9QRVq1yD//+FHifaOMQtf47zIdoxNSyYn0SglIU1SQT/vt8r1xnAcuuavB7BY6\nTjlZGaXP7zR3ch0ph5PhOzQvDHvSVyc41wWsjH9JtC0Wt4nWoleXxVmBAoGAHOtk\nKVxheN66762E5Qyjx3tAsOdlXb090qUdt0Mg4zC16Nubtjk/IL09AnYIG76azlGi\nVvKyR+STccBoeG2mkZxNeu+7dyZIhe3piUjZcKsZgWvw4xL4NNpO684nV2Yx7VYL\nqE7rIAASEKAGuvl5Gojru3tVuDGqLVAfWQVGukECgYEAvRzZrOx4G+O2V2ArYFNS\nUr7eJkwl0cUvnznvea5FD65368J9ti+yXFek3r0Rbv137TxEgF6YE/jRITMmam2E\n4qLEi8kn3dqKw4zYQAam6uc+Rzreq84+EufiwUNUCiICU302HRI9EVdnJVeCTH4l\nfxrchH1OLJyb2Sj8JoP2JAc=\n-----END PRIVATE KEY-----\n",
+    "client_email": "firebase-adminsdk-ob9as@mathletica-9a3d0.iam.gserviceaccount.com",
+    "client_id": "116228146473408297898",
+    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+    "token_uri": "https://oauth2.googleapis.com/token",
+    "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+    "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-ob9as%40mathletica-9a3d0.iam.gserviceaccount.com"
+  }
+  
