@@ -66,7 +66,7 @@ function Points(difficulty, obtainedMarks, averageMarks, timeTaken, timeAllowed)
 
     const worth = (1/averageMarks) * (difficulty * obtainedMarks);
     // const timeBonus = (1 - timeTaken/timeAllowed) * worth; // maybe not add this in
-    return worth.toFixed(2);
+    return worth;
 }
 
 router.post('/login', function (req, res) {
