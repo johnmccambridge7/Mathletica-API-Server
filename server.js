@@ -10,6 +10,8 @@ admin.initializeApp({
     databaseURL: "https://mathletica-9a3d0.firebaseio.com"
 });
 
+// heart animation is not working
+
 firebase.initializeApp({
     apiKey: "AIzaSyAY1OeuDvi_sTsSM-p6TAk2qxHuGWZxNLc",
     authDomain: "mathletica-9a3d0.firebaseapp.com",
@@ -28,12 +30,12 @@ require("firebase/auth");
 const db = admin.firestore();
 
 app.use(cors({
-    origin: 'https://mathletica-9a3d0.web.app'
+    origin: 'http://localhost:3000' // 'https://mathletica-9a3d0.web.app'
 }));
 
-// Points not updating
-// Favicon Broken
-// Session Summary Numbers strange
+// todo before launch:
+// build leaderboard
+// build performance report algorithm (strength/weakness)
   
 app.use(function(req, res, next) {
     res.header("Access-Control-Allow-Origin", "*");
@@ -77,6 +79,7 @@ router.post('/login', function (req, res) {
 router.post('/register', function (req, res) {
     const email = req.body.email;
     const password = req.body.password;
+    const username = req.body.username;
 
     firebase.auth().createUserWithEmailAndPassword(email, password).then((user) => {
         // add a new row to the users table
@@ -84,6 +87,7 @@ router.post('/register', function (req, res) {
 
         usersRef.doc(user.user.uid).set({
             email,
+            username,
             points: 0,
             school: 'Plockton'
         }).then((docRef) => {
@@ -96,6 +100,25 @@ router.post('/register', function (req, res) {
     }).catch((e) => {
         res.json({ success: false, msg: 'Something went wrong.' });
     });
+});
+
+router.post('/getLeaderboard', async function(req, res){
+    const uid = req.body.uid;
+    // fetch the top 5 people and union with the uid position
+    const usersRef = db.collection('users');
+    const usersSnapshot = await usersRef.orderBy('points', 'desc').limit(5).get();
+    const users = [];
+    let userContained = false;
+
+    usersSnapshot.forEach(doc => {
+        const data = doc.data();
+        users.push({ data: { points: data.points, username: data.username, school: data.school } });
+        if (uid === doc.id) {
+            userContained = true;
+        }
+    });
+
+    res.json({ success: true, msg: users });
 });
 
 router.post('/reduceLife', function(req, res){
@@ -298,7 +321,7 @@ router.post('/question', async function(req, res) {
 
             // fetching a new question from the bank
             questionSnapshot.forEach(doc => {
-                questionCandidates.push({ data: doc.data(), questionID: doc.id, progress, remainingHearts: 3 });
+                questionCandidates.push({ data: doc.data(), questionID: doc.id, progress, remainingHearts: 3, viewSkills: sessionData.viewSkills });
             });
 
             const position = Math.floor(Math.random() * questionCandidates.length);
@@ -352,7 +375,13 @@ router.post('/question', async function(req, res) {
             // question is present which has not been completed
             const query = questionRef.doc(sessionData.currentQuestion);
             const question = await query.get();
-            selectedQuestion = { data: question.data(), questionID: sessionData.currentQuestion, progress, remainingHearts: sessionData.remainingHearts };
+            selectedQuestion = { 
+                data: question.data(),
+                questionID: sessionData.currentQuestion,
+                progress,
+                remainingHearts: sessionData.remainingHearts,
+                viewSkills: sessionData.viewSkills
+            };
         }
 
         res.json({ success: true, msg: selectedQuestion });
