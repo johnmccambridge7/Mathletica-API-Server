@@ -30,13 +30,14 @@ require("firebase/auth");
 const db = admin.firestore();
 
 app.use(cors({
-    origin: 'https://mathletica-9a3d0.web.app'
+    origin: 'https://mathletica-9a3d0.web.app' // 'http://localhost:3000' 
 }));
 
 // todo before launch:
 // build leaderboard
 // build performance report algorithm (strength/weakness)
-  
+//   
+
 app.use(function(req, res, next) {
     res.header("Access-Control-Allow-Origin", "*");
     res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
@@ -260,6 +261,7 @@ router.post('/session', async function(req, res) {
         remainingHearts: 3,
         viewSkills: req.body.viewSkills,
         timerEnabled: req.body.timerEnabled,
+        blocked: [],
     };
 
     db.collection('sessions').add(packet).then((docRef) => {
@@ -268,6 +270,15 @@ router.post('/session', async function(req, res) {
         console.log(e);
         res.json({ success: false });
     });
+});
+
+router.post('/blockPart', async function (req, res) {
+    const sid = req.body.sid;
+    const part = req.body.part;
+    const sessionRef = db.collection('sessions').doc(sid);
+
+    packet = { blocked: admin.firestore.FieldValue.arrayUnion(part) };
+    sessionRef.update(packet).catch((e) => { console.log(e) });
 });
 
 // FETCH QUESTION ROUTE:
@@ -321,7 +332,7 @@ router.post('/question', async function(req, res) {
 
             // fetching a new question from the bank
             questionSnapshot.forEach(doc => {
-                questionCandidates.push({ data: doc.data(), questionID: doc.id, progress, remainingHearts: 3, viewSkills: sessionData.viewSkills });
+                questionCandidates.push({ data: doc.data(), questionID: doc.id, progress, remainingHearts: 3, viewSkills: sessionData.viewSkills, timerEnabled: sessionData.timerEnabled, blocked: [] });
             });
 
             const position = Math.floor(Math.random() * questionCandidates.length);
@@ -330,6 +341,7 @@ router.post('/question', async function(req, res) {
             let packet = {
                 currentQuestion: selectedQuestion.questionID,
                 remainingHearts: 3,
+                blocked: [],
             };
 
             if (prevQuestionID) {
@@ -377,10 +389,12 @@ router.post('/question', async function(req, res) {
             const question = await query.get();
             selectedQuestion = { 
                 data: question.data(),
-                questionID: sessionData.currentQuestion,
                 progress,
+                questionID: sessionData.currentQuestion,
                 remainingHearts: sessionData.remainingHearts,
-                viewSkills: sessionData.viewSkills
+                viewSkills: sessionData.viewSkills,
+                timerEnabled: sessionData.timerEnabled,
+                blocked: sessionData.blocked,
             };
         }
 
