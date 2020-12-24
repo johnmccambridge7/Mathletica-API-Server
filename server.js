@@ -7,7 +7,7 @@ var serviceAccount = require("./service.json");
 
 admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
-    databaseURL: "https://mathletica.co.uk"
+    databaseURL: "https://mathletica-9a3d0.firebaseio.com"
 });
 
 // heart animation is not working
@@ -30,7 +30,7 @@ require("firebase/auth");
 const db = admin.firestore();
 
 app.use(cors({
-    origin: 'http://localhost:3000' // 'https://mathletica-9a3d0.web.app'
+    origin: 'https://mathletica.co.uk'
 }));
 
 // todo before launch:
