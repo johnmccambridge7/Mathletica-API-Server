@@ -7,7 +7,7 @@ var serviceAccount = require("./service.json");
 
 admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
-    databaseURL: "https://mathletica-9a3d0.firebaseio.com"
+    databaseURL: "https://mathletica.co.uk"
 });
 
 // heart animation is not working
@@ -30,7 +30,7 @@ require("firebase/auth");
 const db = admin.firestore();
 
 app.use(cors({
-    origin: 'https://mathletica-9a3d0.web.app' // 'http://localhost:3000' 
+    origin: 'http://localhost:3000' // 'https://mathletica-9a3d0.web.app'
 }));
 
 // todo before launch:
@@ -72,6 +72,14 @@ function Points(difficulty, obtainedMarks, averageMarks, timeTaken, timeAllowed)
     return parseInt(worth);
 }
 
+function sigmoid(object) {
+    for (let [key, value] of Object.entries(object)) {
+        object[key] = (1 / (1 + Math.E ** (-1 * value))) - 0.5
+    }
+
+    return object;
+}
+
 router.post('/login', function (req, res) {
     const email = req.body.email;
     const password = req.body.password;
@@ -80,24 +88,37 @@ router.post('/login', function (req, res) {
 router.post('/register', function (req, res) {
     const email = req.body.email;
     const password = req.body.password;
-    const username = req.body.username;
-
+    const firstName = req.body.firstName;
+    const lastName = req.body.lastName;
     firebase.auth().createUserWithEmailAndPassword(email, password).then((user) => {
         // add a new row to the users table
         const usersRef = db.collection('users');
 
         usersRef.doc(user.user.uid).set({
             email,
-            username,
+            firstName,
+            lastName,
             points: 0,
-            school: 'Plockton'
+            school: 'Plockton',
+            performance: {
+                Circles: 0,
+                Differentiation: 0,
+                'Equation of Line': 0,
+                Exponentials: 0,
+                'Functions & Graphs': 0,
+                Integration: 0,
+                Logarithm: 0,
+                'Polynomials & Quadratics': 0,
+                'Recurrence Relations': 0,
+                'Trig Formulae & Equations': 0,
+                Vectors: 0
+            }
         }).then((docRef) => {
             res.json({ success: true, msg: user });
         }).catch((e) => {
             console.log(e);
             res.json({ success: false });
         });
-
     }).catch((e) => {
         res.json({ success: false, msg: 'Something went wrong.' });
     });
@@ -125,86 +146,135 @@ router.post('/getLeaderboard', async function(req, res){
 router.post('/reduceLife', function(req, res){
     const sid = req.body.sid;
     const sessionRef = db.collection('sessions').doc(sid);
-    console.log(sid);
     sessionRef.update({ remainingHearts: admin.firestore.FieldValue.increment(-1) });
+    res.json({ success: true });
 });
 
 // need a route for getting the summary report based on a session id
 router.post('/getSummaryReport', async function(req, res) {
     const sid = req.body.sid;
-    //const uid = req.body.uid;
     
     const questionRef = db.collection('questions');
+    const userRef = db.collection('users');
+    const performanceRef = db.collection('performance');
     const sessionRef = db.collection('sessions').doc(sid);
-    const session = await sessionRef.get();
 
-    if (session.exists) {
-        
-        const sessionData = session.data();
-        let refs = [];
+    const performanceReport = await performanceRef.doc(sid).get();
 
-        for (const question of sessionData.metadata) {
-            refs.push(questionRef.doc(question.id));
-        }
+    if (!performanceReport.exists) {
+        const session = await sessionRef.get();
 
-        // lets cache the report
+        if (session.exists) {
+            const sessionData = session.data();
+            const user = await userRef.doc(sessionData.uid).get();
+            const userData = user.data();
 
-        db.getAll(...refs).then(docs => {
-            let questionBody = {};
-            for (const doc of docs) {
-                questionBody[doc.id] = doc.data();
-            }
-
-            const scores = [];
-    
-            let score = 0;
-            let total = 0;
-            let totalParts = 0;
-            let partsCorrect = 0;
-            let points = 0;
-            let number = 1;
+            let refs = [];
 
             for (const question of sessionData.metadata) {
-                score += question.stats.marks;
-                total += question.stats.total;
-    
-                totalParts += question.answers.length;
-    
-                const questionData = questionBody[question.id];
-                const unformattedScores = [];
-
-                question.answers.forEach(answer => {
-                  const average = questionData.parts[answer.part].average;
-                  partsCorrect += (answer.correct) ? 1 : 0;
-                  points += Points(answer.difficulty, answer.marks, average);
-    
-                  unformattedScores.push({
-                      question: number,
-                      part: answer.part,
-                      average: parseFloat(average ? average.toFixed(1) : 0),
-                      marks: answer.marks,
-                      points: Points(answer.difficulty, answer.marks, average),
-                      averagePoints: Points(answer.difficulty, average, average)
-                  });
-                });
-
-                // sort based on the parts
-                unformattedScores.sort((a, b) => {
-                    if (a.part < b.part) return -1;
-                    if (a.part > b.part) return 1;
-                    return 0;
-                }).forEach(item => scores.push(item));
-
-                number += 1;
+                refs.push(questionRef.doc(question.id));
             }
 
-            // increment points after question
-            // userRef.update({ points: admin.firestore.FieldValue.increment(points) }).catch((e) => { console.log(e) });
+            db.getAll(...refs).then(docs => {
+                let questionBody = {};
+                for (const doc of docs) {
+                    questionBody[doc.id] = doc.data();
+                }
+
+                const scores = [];
+        
+                let score = 0;
+                let total = 0;
+                let totalParts = 0;
+                let partsCorrect = 0;
+                let points = 0;
+                let number = 1;
+
+                let questionTopics = {};
+                let correctAnswers = {};
+
+                for (const question of sessionData.metadata) {
+                    score += question.stats.marks;
+                    total += question.stats.total;
+        
+                    totalParts += question.answers.length;
+        
+                    const questionData = questionBody[question.id];
+                    const unformattedScores = [];
+
+                    question.answers.forEach(answer => {
+                        const average = questionData.parts[answer.part].average;
+                        const topic = questionData.parts[answer.part].topic;
+
+                        partsCorrect += (answer.correct) ? 1 : 0;
+                        points += Points(answer.difficulty, answer.marks, average);
             
-            score = parseInt((100 * score) / total);
-            res.json({ success: true, msg: {score, scores, totalParts, partsCorrect, points} });
-        });
-    };
+                        performanceScore = (answer.correct) ? 1 : -1;
+                        correctScore = (answer.correct) ? 1 : 0;
+
+                        if (!questionTopics[topic]) {
+                            questionTopics[topic] = 0;
+                        }
+
+                        if (!correctAnswers[topic]) {
+                            correctAnswers[topic] = 0;
+                        }
+                        
+                        questionTopics[topic] += performanceScore;
+                        correctAnswers[topic] += correctScore;
+
+                        unformattedScores.push({
+                            question: number,
+                            part: answer.part,
+                            average: parseFloat(average ? average.toFixed(1) : 0),
+                            marks: answer.marks,
+                            points: Points(answer.difficulty, answer.marks, average),
+                            averagePoints: Points(answer.difficulty, average, average)
+                        });
+                    });
+
+                    // sort based on the parts
+                    unformattedScores.sort((a, b) => {
+                        if (a.part < b.part) return -1;
+                        if (a.part > b.part) return 1;
+                        return 0;
+                    }).forEach(item => scores.push(item));
+
+                    number += 1;
+                }
+
+                score = parseInt((100 * score) / total);
+                const report = { score, scores, totalParts, partsCorrect, points, performance: sigmoid(questionTopics), correctAnswers };
+
+                // increment points after question
+                // userRef.update({ points: admin.firestore.FieldValue.increment(points) }).catch((e) => { console.log(e) });
+
+                for (const [key, value] of Object.entries(userData.performance)) {
+                    if (correctAnswers[key]) {
+                        correctAnswers[key] += value;
+                    } else {
+                        correctAnswers[key] = value;
+                    }
+                }
+
+                userRef.doc(sessionData.uid).update({
+                    performance: correctAnswers
+                }).catch((e) => { console.log(e) });
+
+                // cache the summary report and fetch later
+                performanceRef.doc(sid).set(report).then((docRef) => {
+                    res.json({ success: true, msg: report });
+                }).catch((e) => {
+                    console.log(e);
+                    res.json({ success: false });
+                });
+            });
+        } else {
+            res.json({ success: false, msg: 'Session not found.'});
+        };
+    } else {
+        res.json({ success: true, msg: { ...performanceReport.data() } });
+    }
 });
 
 router.post('/getSession', async function(req, res) {
@@ -245,6 +315,8 @@ router.post('/getSessions', async function(req, res) {
     }
 });
 
+// when you start session it resumes the previous
+
 // ESTABLISH SESSION ROUTE:
 // setup a session for the user with a session uid; returns a question and session id.
 // session will store the uid, correct/incorrect stats, type of questions, topics etc.
@@ -254,6 +326,7 @@ router.post('/session', async function(req, res) {
         date: new Date().getTime(),
         topics: req.body.topics,
         currentQuestion: '',
+        started: false,
         // categories: req.body.categories,
         metadata: [],
         questionIDs: [],
@@ -279,6 +352,7 @@ router.post('/blockPart', async function (req, res) {
 
     packet = { blocked: admin.firestore.FieldValue.arrayUnion(part) };
     sessionRef.update(packet).catch((e) => { console.log(e) });
+    res.json({ success: true });
 });
 
 // FETCH QUESTION ROUTE:
@@ -306,6 +380,10 @@ router.post('/question', async function(req, res) {
         const progress = [];
         let selectedQuestion = {};
 
+        if (!sessionData.started) {
+            sessionRef.update({ started: true }).catch((e) => { console.log(e) });
+        }
+
         // Create a list of the progress as boolean array
         sessionData.metadata.forEach((item, index) => {
             progress.push(item.stats.allCorrect);
@@ -332,7 +410,16 @@ router.post('/question', async function(req, res) {
 
             // fetching a new question from the bank
             questionSnapshot.forEach(doc => {
-                questionCandidates.push({ data: doc.data(), questionID: doc.id, progress, remainingHearts: 3, viewSkills: sessionData.viewSkills, timerEnabled: sessionData.timerEnabled, blocked: [] });
+                questionCandidates.push({ data: doc.data(), 
+                    questionID: doc.id,
+                    progress,
+                    remainingHearts: 3,
+                    viewSkills: sessionData.viewSkills,
+                    timerEnabled: sessionData.timerEnabled,
+                    blocked: [],
+                    fullTopics: sessionData.topics,
+                    started: sessionData.started
+                });
             });
 
             const position = Math.floor(Math.random() * questionCandidates.length);
@@ -341,7 +428,7 @@ router.post('/question', async function(req, res) {
             let packet = {
                 currentQuestion: selectedQuestion.questionID,
                 remainingHearts: 3,
-                blocked: [],
+                blocked: []
             };
 
             if (prevQuestionID) {
@@ -369,9 +456,9 @@ router.post('/question', async function(req, res) {
 
                     const points = Points(answer.difficulty, answer.marks, currentAvg);
 
-                    console.log('Marks: ', answer);
+                    /* console.log('Marks: ', answer);
                     console.log('Stats: ', answer.difficulty, answer.marks, currentAvg);
-                    console.log('Points Earned: ', points);
+                    console.log('Points Earned: ', points); */
 
                     userRef.update({ points: admin.firestore.FieldValue.increment(points) }).catch((e) => { console.log(e) });
                 });
@@ -395,6 +482,8 @@ router.post('/question', async function(req, res) {
                 viewSkills: sessionData.viewSkills,
                 timerEnabled: sessionData.timerEnabled,
                 blocked: sessionData.blocked,
+                started: sessionData.started,
+                fullTopics: sessionData.topics,
             };
         }
 
