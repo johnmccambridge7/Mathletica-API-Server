@@ -134,7 +134,7 @@ router.post('/getLeaderboard', async function(req, res){
 
     usersSnapshot.forEach(doc => {
         const data = doc.data();
-        users.push({ data: { points: data.points, username: data.username, school: data.school } });
+        users.push({ data: { points: data.points, firstName: data.firstName, lastName: data.lastName, school: data.school } });
         if (uid === doc.id) {
             userContained = true;
         }
