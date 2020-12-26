@@ -31,7 +31,7 @@ require("firebase/auth");
 const db = admin.firestore();
 
 app.use(cors({
-    origin: 'https://mathletica.co.uk'
+    origin: 'https://mathletica.co.uk',
 }));
 
 // todo before launch:
@@ -409,6 +409,20 @@ router.post('/session', async function(req, res) {
         console.log(e);
         res.json({ success: false });
     });
+});
+
+router.post('/report', async function (req, res) {
+    const sid = req.body.sid;
+    const uid = req.body.uid;
+    const qid = req.body.qid;
+
+    db.collection('reports').add({ sid, uid, qid }).then((docRef) => {
+        res.json({ success: true });
+    }).catch((e) => {
+        console.log(e);
+        res.json({ success: false });
+    });
+
 });
 
 router.post('/blockPart', async function (req, res) {
