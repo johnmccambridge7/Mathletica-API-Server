@@ -4,6 +4,7 @@ var bodyParser = require('body-parser');
 var admin = require("firebase-admin");
 var firebase = require("firebase/app");
 var serviceAccount = require("./service.json");
+var ss = require('simple-statistics')
 
 admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
@@ -80,6 +81,54 @@ function sigmoid(object) {
     return object;
 }
 
+async function getRanking(uid, userData, scope) {
+    const usersRef = db.collection('users');
+
+    if (scope === 'local') {
+        usersSnapshot = await usersRef.where('school', '==', userData.school).orderBy('points', 'desc').limit(5).get();
+    }  else {
+        usersSnapshot = await usersRef.orderBy('points', 'desc').limit(5).get();
+    }
+
+    const pts = userData.points;
+
+    const users = [];
+    let userContained = false;
+    let ranking = 1;
+    let officialRanking = 1;
+    const points = [];
+
+    usersSnapshot.forEach(doc => {
+        const data = doc.data();
+        users.push({ data: { points: data.points, firstName: data.firstName, lastName: data.lastName, school: data.school } });
+
+        points.push([parseInt(data.points), Math.log(ranking)]);
+
+        if (uid === doc.id) {
+            userContained = true;
+            officialRanking = ranking;
+        }
+
+        ranking += 1;
+
+        // curves the asymptote up
+        points.push([0, Math.log(10000)]);
+    });
+
+
+    if (!userContained) {
+        // use linear regression to build exponential model to predict ranking
+        const line = ss.linearRegression(points);
+        const A = Math.E ** line.b;
+        const B = line.m;
+        ranking = Math.ceil((A * Math.E ** (B * pts)))
+    } else {
+        ranking = officialRanking;
+    }
+
+    return { users, ranking, school: userData.school, prevRanking: (scope === 'global') ? userData.prevGlobalRanking : userData.prevLocalRanking };
+}
+
 router.post('/login', function (req, res) {
     const email = req.body.email;
     const password = req.body.password;
@@ -100,6 +149,8 @@ router.post('/register', function (req, res) {
             lastName,
             points: 0,
             school: 'Plockton',
+            prevLocalRanking: 10000,
+            prevGlobalRanking: 10000,
             performance: {
                 Circles: 0,
                 Differentiation: 0,
@@ -126,28 +177,37 @@ router.post('/register', function (req, res) {
 
 router.post('/getLeaderboard', async function(req, res){
     const uid = req.body.uid;
-    // fetch the top 5 people and union with the uid position
+
+    // based on the scope, fetch the leaderboard
     const usersRef = db.collection('users');
-    const usersSnapshot = await usersRef.orderBy('points', 'desc').limit(5).get();
-    const users = [];
-    let userContained = false;
+    const user = await usersRef.doc(uid).get();
+    const userData = user.data();
 
-    usersSnapshot.forEach(doc => {
-        const data = doc.data();
-        users.push({ data: { points: data.points, firstName: data.firstName, lastName: data.lastName, school: data.school } });
-        if (uid === doc.id) {
-            userContained = true;
-        }
-    });
+    // fetch the top 5 people and union with the uid position
+    let globalRanking = await getRanking(uid, userData, 'global');
+    let localRanking = await getRanking(uid, userData, 'local');
 
-    res.json({ success: true, msg: users });
+    res.json({ success: true, msg: { 
+        prevGlobalRanking: globalRanking.prevRanking,
+        prevLocalRanking: localRanking.prevRanking,
+        school: localRanking.school,
+        users: globalRanking.users,
+        ranking: globalRanking.ranking,
+        localRanking: localRanking.ranking,
+        localUsers: localRanking.users
+    }});
 });
 
 router.post('/reduceLife', function(req, res){
     const sid = req.body.sid;
     const sessionRef = db.collection('sessions').doc(sid);
-    sessionRef.update({ remainingHearts: admin.firestore.FieldValue.increment(-1) });
-    res.json({ success: true });
+    console.log('Reducing life for:', sid);
+    sessionRef.update({ remainingHearts: admin.firestore.FieldValue.increment(-1) }).then(() => {
+        res.json({ success: true });
+    }).catch(e => {
+        console.log('Error reducing life: ', e);
+        res.json({ success: false });
+    });
 });
 
 // need a route for getting the summary report based on a session id
@@ -175,7 +235,7 @@ router.post('/getSummaryReport', async function(req, res) {
                 refs.push(questionRef.doc(question.id));
             }
 
-            db.getAll(...refs).then(docs => {
+            db.getAll(...refs).then(async docs => {
                 let questionBody = {};
                 for (const doc of docs) {
                     questionBody[doc.id] = doc.data();
@@ -245,10 +305,7 @@ router.post('/getSummaryReport', async function(req, res) {
 
                 score = parseInt((100 * score) / total);
                 const report = { score, scores, totalParts, partsCorrect, points, performance: sigmoid(questionTopics), correctAnswers };
-
-                // increment points after question
-                // userRef.update({ points: admin.firestore.FieldValue.increment(points) }).catch((e) => { console.log(e) });
-
+                
                 for (const [key, value] of Object.entries(userData.performance)) {
                     if (correctAnswers[key]) {
                         correctAnswers[key] += value;
@@ -257,13 +314,24 @@ router.post('/getSummaryReport', async function(req, res) {
                     }
                 }
 
-                userRef.doc(sessionData.uid).update({
-                    performance: correctAnswers
-                }).catch((e) => { console.log(e) });
+                // making two calls to the user
+                let globalRanking = await getRanking(sessionData.uid, userData, 'global');
+                let localRanking = await getRanking(sessionData.uid, userData, 'local');
 
-                // cache the summary report and fetch later
-                performanceRef.doc(sid).set(report).then((docRef) => {
-                    res.json({ success: true, msg: report });
+                // increment points and rank the user 
+                userRef.doc(sessionData.uid).update({ 
+                    points: admin.firestore.FieldValue.increment(points),
+                    performance: correctAnswers
+                }).then(() => {
+                    userRef.doc(sessionData.uid).update({ 
+                        prevGlobalRanking: globalRanking.ranking,
+                        prevLocalRanking: localRanking.ranking,
+                    }).then(() => {
+                        // cache the summary report and fetch later
+                        performanceRef.doc(sid).set(report).then((docRef) => {
+                            res.json({ success: true, msg: report });
+                        });
+                    });
                 }).catch((e) => {
                     console.log(e);
                     res.json({ success: false });
@@ -293,7 +361,6 @@ router.post('/getSession', async function(req, res) {
 router.post('/getSessions', async function(req, res) {
     const uid = req.body.uid;
 
-    
     const sessionRef = db.collection('sessions');
     const sessionSnapshot = await sessionRef.where('uid', '==', uid).orderBy('date', 'desc').get();
     const sessions = [];
@@ -326,7 +393,6 @@ router.post('/session', async function(req, res) {
         date: new Date().getTime(),
         topics: req.body.topics,
         currentQuestion: '',
-        started: false,
         // categories: req.body.categories,
         metadata: [],
         questionIDs: [],
@@ -351,8 +417,9 @@ router.post('/blockPart', async function (req, res) {
     const sessionRef = db.collection('sessions').doc(sid);
 
     packet = { blocked: admin.firestore.FieldValue.arrayUnion(part) };
-    sessionRef.update(packet).catch((e) => { console.log(e) });
-    res.json({ success: true });
+    sessionRef.update(packet).then(() => {
+        res.json({ success: true });
+    }).catch((e) => { console.log('Block', e); res.json({ success: false }); });
 });
 
 // FETCH QUESTION ROUTE:
@@ -379,10 +446,6 @@ router.post('/question', async function(req, res) {
         const currentQuestion = sessionData.currentQuestion;
         const progress = [];
         let selectedQuestion = {};
-
-        if (!sessionData.started) {
-            sessionRef.update({ started: true }).catch((e) => { console.log(e) });
-        }
 
         // Create a list of the progress as boolean array
         sessionData.metadata.forEach((item, index) => {
@@ -418,7 +481,6 @@ router.post('/question', async function(req, res) {
                     timerEnabled: sessionData.timerEnabled,
                     blocked: [],
                     fullTopics: sessionData.topics,
-                    started: sessionData.started
                 });
             });
 
@@ -460,7 +522,7 @@ router.post('/question', async function(req, res) {
                     console.log('Stats: ', answer.difficulty, answer.marks, currentAvg);
                     console.log('Points Earned: ', points); */
 
-                    userRef.update({ points: admin.firestore.FieldValue.increment(points) }).catch((e) => { console.log(e) });
+                    // userRef.update({ points: admin.firestore.FieldValue.increment(points) }).catch((e) => { console.log(e) });
                 });
 
                 packet = {
@@ -482,7 +544,6 @@ router.post('/question', async function(req, res) {
                 viewSkills: sessionData.viewSkills,
                 timerEnabled: sessionData.timerEnabled,
                 blocked: sessionData.blocked,
-                started: sessionData.started,
                 fullTopics: sessionData.topics,
             };
         }
