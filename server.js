@@ -4,7 +4,7 @@ var bodyParser = require('body-parser');
 var admin = require("firebase-admin");
 var firebase = require("firebase/app");
 var serviceAccount = require("./service.json");
-var ss = require('simple-statistics')
+var ss = require('simple-statistics');
 
 admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
@@ -31,13 +31,13 @@ require("firebase/auth");
 const db = admin.firestore();
 
 app.use(cors({
-    origin: 'https://mathletica.co.uk',
+    origin: 'https://mathletica.co.uk'
 }));
 
 // todo before launch:
 // build leaderboard
 // build performance report algorithm (strength/weakness)
-//   
+// based on all sessions taken: predict the current grade
 
 app.use(function(req, res, next) {
     res.header("Access-Control-Allow-Origin", "*");
@@ -451,6 +451,9 @@ router.post('/question', async function(req, res) {
     const sessionRef = db.collection('sessions').doc(sid);
     const userRef = db.collection('users').doc(uid);
 
+    // use discrete buckets to store each question in the selected topics
+    // each bucket size is max 10
+
     const session = await sessionRef.get();
 
     if (session.exists) {
@@ -487,7 +490,12 @@ router.post('/question', async function(req, res) {
 
             // fetching a new question from the bank
             questionSnapshot.forEach(doc => {
-                questionCandidates.push({ data: doc.data(), 
+                const data = doc.data();
+                questionCandidates.push({
+                    data: {
+                        ...data,
+                        parts: data.parts,
+                    }, // need to filter out the parts not relevant to the session
                     questionID: doc.id,
                     progress,
                     remainingHearts: 3,
@@ -530,7 +538,7 @@ router.post('/question', async function(req, res) {
                         [averageField]: ((currentAvg * answered) + marks) / (answered + 1)
                     }).catch((e) => { console.log(e) });
 
-                    const points = Points(answer.difficulty, answer.marks, currentAvg);
+                    // const points = Points(answer.difficulty, answer.marks, currentAvg);
 
                     /* console.log('Marks: ', answer);
                     console.log('Stats: ', answer.difficulty, answer.marks, currentAvg);
@@ -545,7 +553,13 @@ router.post('/question', async function(req, res) {
                 };
             }
             
-            sessionRef.update(packet).catch((e) => { console.log(e) });
+            // if the update fails, we might decrement the hearts below 0
+            sessionRef.update(packet).then(() => {
+                res.json({ success: true, msg: selectedQuestion });
+            }).catch((e) => {
+                console.log(e);
+                res.json({ success: false });
+            });
         } else {
             // question is present which has not been completed
             const query = questionRef.doc(sessionData.currentQuestion);
@@ -560,10 +574,9 @@ router.post('/question', async function(req, res) {
                 blocked: sessionData.blocked,
                 fullTopics: sessionData.topics,
             };
+
+            res.json({ success: true, msg: selectedQuestion });
         }
-
-        res.json({ success: true, msg: selectedQuestion });
-
     } else {
         res.json({ success: false, msg: {}});    
     }
