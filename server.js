@@ -4,7 +4,7 @@ var bodyParser = require('body-parser');
 var admin = require("firebase-admin");
 var firebase = require("firebase/app");
 var serviceAccount = require("./service.json");
-var ss = require('simple-statistics')
+var ss = require('simple-statistics');
 
 admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
@@ -490,8 +490,12 @@ router.post('/question', async function(req, res) {
 
             // fetching a new question from the bank
             questionSnapshot.forEach(doc => {
+                const data = doc.data();
                 questionCandidates.push({
-                    data: doc.data(), // need to filter out the parts not relevant to the session
+                    data: {
+                        ...data,
+                        parts: data.parts,
+                    }, // need to filter out the parts not relevant to the session
                     questionID: doc.id,
                     progress,
                     remainingHearts: 3,
