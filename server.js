@@ -4,7 +4,7 @@ var bodyParser = require('body-parser');
 var admin = require("firebase-admin");
 var firebase = require("firebase/app");
 var serviceAccount = require("./service.json");
-var ss = require('simple-statistics');
+var ss = require('simple-statistics')
 
 admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
@@ -129,6 +129,30 @@ async function getRanking(uid, userData, scope) {
     return { users, ranking, school: userData.school, prevRanking: (scope === 'global') ? userData.prevGlobalRanking : userData.prevLocalRanking };
 }
 
+// debug only
+router.get('/stats', async function (req, res) {
+    const questionRef = db.collection('questions');
+    questionRef.get().then((querySnapshot) => {
+        const stats = {};
+        let count = 0;
+        querySnapshot.forEach((doc) => {
+            questionData = doc.data();
+
+            questionData.topics.forEach(topic => {
+                if (stats[topic]) {
+                    stats[topic] += 1;
+                } else {
+                    stats[topic] = 1;
+                }
+            });
+
+            count += 1;
+        })
+
+        res.json({ msg: stats, count });
+    })    
+});
+
 router.post('/login', function (req, res) {
     const email = req.body.email;
     const password = req.body.password;
@@ -202,6 +226,9 @@ router.post('/reduceLife', function(req, res){
     const sid = req.body.sid;
     const sessionRef = db.collection('sessions').doc(sid);
     console.log('Reducing life for:', sid);
+
+    // why is session id changing??
+    
     sessionRef.update({ remainingHearts: admin.firestore.FieldValue.increment(-1) }).then(() => {
         res.json({ success: true });
     }).catch(e => {
@@ -388,7 +415,7 @@ router.post('/getSessions', async function(req, res) {
 // setup a session for the user with a session uid; returns a question and session id.
 // session will store the uid, correct/incorrect stats, type of questions, topics etc.
 router.post('/session', async function(req, res) {
-    const packet = {
+    let packet = {
         uid: req.body.uid,
         date: new Date().getTime(),
         topics: req.body.topics,
@@ -402,6 +429,8 @@ router.post('/session', async function(req, res) {
         timerEnabled: req.body.timerEnabled,
         blocked: [],
     };
+
+    req.body.topics.forEach(topic => packet[topic] = []);
 
     db.collection('sessions').add(packet).then((docRef) => {
         res.json({ success: true, sid: docRef.id });
@@ -459,7 +488,6 @@ router.post('/question', async function(req, res) {
     if (session.exists) {
         const sessionData = session.data();
         const topics = sessionData.topics;
-        const previousQuestions = sessionData.questionIDs;
         const currentQuestion = sessionData.currentQuestion;
         const progress = [];
         let selectedQuestion = {};
@@ -482,20 +510,25 @@ router.post('/question', async function(req, res) {
             
             // Select a topic at random from the choices
             const topic = topics[Math.floor(Math.random() * topics.length)];
-                    
+            const previousQuestions = sessionData[topic]; // holds an array of each possible topic containing question ids
+
             // Query the main database for a question based on topic
             // .where('__name__', 'not-in', previousQuestions).
-            const questionSnapshot = await questionRef.where('topics', 'array-contains', topic).get();
+
+            let questionSnapshot;
+
+            if (previousQuestions.length === 0) {
+                questionSnapshot = await questionRef.where('topics', 'array-contains', topic).get();
+            } else {
+                questionSnapshot = await questionRef.where('topics', 'array-contains', topic).where('__name__', 'not-in', previousQuestions).get();
+            }
+
             const questionCandidates = [];
 
             // fetching a new question from the bank
             questionSnapshot.forEach(doc => {
-                const data = doc.data();
                 questionCandidates.push({
-                    data: {
-                        ...data,
-                        parts: data.parts,
-                    }, // need to filter out the parts not relevant to the session
+                    data: doc.data(), // need to filter out the parts not relevant to the session
                     questionID: doc.id,
                     progress,
                     remainingHearts: 3,
@@ -514,6 +547,9 @@ router.post('/question', async function(req, res) {
                 remainingHearts: 3,
                 blocked: []
             };
+
+            // view solution? after revealing?
+            // its the view solution!
 
             if (prevQuestionID) {
                 const prevQuestion = await questionRef.doc(prevQuestionID).get();
@@ -549,6 +585,7 @@ router.post('/question', async function(req, res) {
 
                 packet = {
                     ...packet,
+                    [topic]: admin.firestore.FieldValue.arrayUnion(prevQuestionID),
                     metadata: admin.firestore.FieldValue.arrayUnion({ aid:uuidv4(), id:prevQuestionID, answers:prevAnswers, stats:prevStats })
                 };
             }
