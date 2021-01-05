@@ -31,7 +31,7 @@ require("firebase/auth");
 const db = admin.firestore();
 
 app.use(cors({
-    origin: 'https://mathletica.co.uk'
+    origin: 'http://localhost:3000', // 'https://mathletica.co.uk'
 }));
 
 // todo before launch:
@@ -84,6 +84,8 @@ function sigmoid(object) {
 async function getRanking(uid, userData, scope) {
     const usersRef = db.collection('users');
 
+    let usersSnapshot;
+
     if (scope === 'local') {
         usersSnapshot = await usersRef.where('school', '==', userData.school).orderBy('points', 'desc').limit(5).get();
     }  else {
@@ -100,7 +102,7 @@ async function getRanking(uid, userData, scope) {
 
     usersSnapshot.forEach(doc => {
         const data = doc.data();
-        users.push({ data: { points: data.points, firstName: data.firstName, lastName: data.lastName, school: data.school } });
+        users.push({ data: { points: data.points, streak: data.streak, firstName: data.firstName, lastName: data.lastName, school: data.school } });
 
         points.push([parseInt(data.points), Math.log(ranking)]);
 
@@ -574,13 +576,7 @@ router.post('/question', async function(req, res) {
                         [averageField]: ((currentAvg * answered) + marks) / (answered + 1)
                     }).catch((e) => { console.log(e) });
 
-                    // const points = Points(answer.difficulty, answer.marks, currentAvg);
-
-                    /* console.log('Marks: ', answer);
-                    console.log('Stats: ', answer.difficulty, answer.marks, currentAvg);
-                    console.log('Points Earned: ', points); */
-
-                    // userRef.update({ points: admin.firestore.FieldValue.increment(points) }).catch((e) => { console.log(e) });
+                    userRef.update({ lastQuestion:  admin.firestore.FieldValue.serverTimestamp() }).catch((e) => { console.log(e) });
                 });
 
                 packet = {
