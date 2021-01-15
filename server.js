@@ -131,6 +131,11 @@ async function getRanking(uid, userData, scope) {
     return { users, ranking, school: userData.school, prevRanking: (scope === 'global') ? userData.prevGlobalRanking : userData.prevLocalRanking };
 }
 
+router.post('/progress', async function (req, res) {
+    // fetch all the users' sessions and performance reports and aggregate information
+    
+});
+
 // debug only
 router.get('/stats', async function (req, res) {
     const questionRef = db.collection('questions');
