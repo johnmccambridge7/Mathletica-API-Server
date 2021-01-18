@@ -133,7 +133,32 @@ async function getRanking(uid, userData, scope) {
 
 router.post('/progress', async function (req, res) {
     // fetch all the users' sessions and performance reports and aggregate information
-    
+});
+
+router.post('/livestream', async function (req, res) {
+    const currentTimestamp = new Date().getTime();
+    const uid = req.body.question.uid;
+    const question = { ...req.body.question, time: currentTimestamp };
+    const ref = db.collection('livestream');
+
+    const questionSnapshot = await ref.where('uid', '==', uid).orderBy('time', 'desc').limit(1).get();
+
+    if (questionSnapshot.size > 0) {
+        questionSnapshot.forEach(doc => {
+            const data = doc.data();
+            const previousTimestamp = data.time;
+            const delta = currentTimestamp - previousTimestamp;
+
+            if (delta > 10000) {
+                ref.add(question).then((docRef) => res.json({ success: true }) ).catch((e) => res.json({ success: false }) );
+            } else {
+                res.json({ success: false });
+            }
+        });
+    } else {
+        console.log('Adding new question', uid);
+        ref.add(question).then((docRef) => res.json({ success: true }) ).catch((e) => res.json({ success: false }) );
+    }
 });
 
 // debug only
