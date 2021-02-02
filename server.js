@@ -29,7 +29,7 @@ require("firebase/auth");
 const db = admin.firestore();
 
 app.use(cors({
-    origin: 'https://mathletica.co.uk'
+    origin: 'http://localhost:3000', // 'https://mathletica.co.uk'
 }));
 
 // todo before launch:
@@ -453,6 +453,7 @@ router.post('/session', async function(req, res) {
         uid: req.body.uid,
         date: new Date().getTime(),
         topics: req.body.topics,
+        type: req.body.multipleChoice ? 'multiple' : 'general',
         currentQuestion: '',
         // categories: req.body.categories,
         metadata: [],
@@ -460,7 +461,6 @@ router.post('/session', async function(req, res) {
         sessionData: {},
         remainingHearts: 3,
         viewSkills: req.body.viewSkills,
-        timerEnabled: req.body.timerEnabled,
         multipleChoiceAnswer: "",
         blocked: [],
     };
