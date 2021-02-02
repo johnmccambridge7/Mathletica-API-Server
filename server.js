@@ -11,8 +11,6 @@ admin.initializeApp({
     databaseURL: "https://mathletica-9a3d0.firebaseio.com"
 });
 
-// heart animation is not working
-
 firebase.initializeApp({
     apiKey: "AIzaSyAY1OeuDvi_sTsSM-p6TAk2qxHuGWZxNLc",
     authDomain: "mathletica-9a3d0.firebaseapp.com",
@@ -169,25 +167,24 @@ router.get('/stats', async function (req, res) {
         let count = 0;
         querySnapshot.forEach((doc) => {
             questionData = doc.data();
-
-            questionData.topics.forEach(topic => {
-                if (stats[topic]) {
-                    stats[topic] += 1;
-                } else {
-                    stats[topic] = 1;
-                }
-            });
-
+            
+            if (questionData.topics) {
+                questionData.topics.forEach(topic => {
+                    if (stats[topic]) {
+                        stats[topic] += 1;
+                    } else {
+                        stats[topic] = 1;
+                    }
+                });
+            } else {
+                stats[questionData.topic] += 1;
+            }
+            
             count += 1;
         })
 
         res.json({ msg: stats, count });
     })    
-});
-
-router.post('/login', function (req, res) {
-    const email = req.body.email;
-    const password = req.body.password;
 });
 
 router.post('/register', function (req, res) {
@@ -207,6 +204,7 @@ router.post('/register', function (req, res) {
             school: 'Plockton',
             prevLocalRanking: 10000,
             prevGlobalRanking: 10000,
+            tutorial: false,
             performance: {
                 Circles: 0,
                 Differentiation: 0,
@@ -254,20 +252,11 @@ router.post('/getLeaderboard', async function(req, res){
     }});
 });
 
-router.post('/reduceLife', function(req, res){
-    const sid = req.body.sid;
-    const sessionRef = db.collection('sessions').doc(sid);
-    console.log('Reducing life for:', sid);
-
-    // why is session id changing??
-    
-    sessionRef.update({ remainingHearts: admin.firestore.FieldValue.increment(-1) }).then(() => {
-        res.json({ success: true });
-    }).catch(e => {
-        console.log('Error reducing life: ', e);
-        res.json({ success: false });
-    });
-});
+/*
+Need to correctly upload metadata to generate the summary report
+Add switch for showing multiple choice questions
+Calculate scores correctly
+*/
 
 // need a route for getting the summary report based on a session id
 router.post('/getSummaryReport', async function(req, res) {
@@ -277,6 +266,8 @@ router.post('/getSummaryReport', async function(req, res) {
     const userRef = db.collection('users');
     const performanceRef = db.collection('performance');
     const sessionRef = db.collection('sessions').doc(sid);
+
+    console.log(sid);
 
     const performanceReport = await performanceRef.doc(sid).get();
 
@@ -322,8 +313,8 @@ router.post('/getSummaryReport', async function(req, res) {
                     const unformattedScores = [];
 
                     question.answers.forEach(answer => {
-                        const average = questionData.parts[answer.part].average;
-                        const topic = questionData.parts[answer.part].topic;
+                        const average = (questionData.parts) ? questionData.parts[answer.part].average : questionData.average;
+                        const topic = (questionData.parts) ? questionData.parts[answer.part].topic : questionData.topic;
 
                         partsCorrect += (answer.correct) ? 1 : 0;
                         points += Points(answer.difficulty, answer.marks, average);
@@ -342,14 +333,21 @@ router.post('/getSummaryReport', async function(req, res) {
                         questionTopics[topic] += performanceScore;
                         correctAnswers[topic] += correctScore;
 
-                        unformattedScores.push({
+                        // fix computing the average and points function
+                        const formattedAverage = parseFloat(average ? average.toFixed(1) : 0);
+
+                        console.log(answer);
+
+                        const stat = {
                             question: number,
-                            part: answer.part,
-                            average: parseFloat(average ? average.toFixed(1) : 0),
+                            part: (answer.part) ? answer.part : 'a',
+                            average: formattedAverage,
                             marks: answer.marks,
                             points: Points(answer.difficulty, answer.marks, average),
                             averagePoints: Points(answer.difficulty, average, average)
-                        });
+                        }
+
+                        unformattedScores.push(stat);
                     });
 
                     // sort based on the parts
@@ -365,6 +363,8 @@ router.post('/getSummaryReport', async function(req, res) {
                 score = parseInt((100 * score) / total);
                 const report = { score, scores, totalParts, partsCorrect, points, performance: sigmoid(questionTopics), correctAnswers };
                 
+                // console.log('Report: ', report);
+
                 for (const [key, value] of Object.entries(userData.performance)) {
                     if (correctAnswers[key]) {
                         correctAnswers[key] += value;
@@ -408,6 +408,8 @@ router.post('/getSession', async function(req, res) {
     const sid = req.body.sid;
     const sessionRef = db.collection('sessions').doc(sid);
     const session = await sessionRef.get();
+
+    console.log('Fetching session: ', sid);
 
     if (session.exists) {
         const sessionData = session.data();
@@ -459,10 +461,13 @@ router.post('/session', async function(req, res) {
         remainingHearts: 3,
         viewSkills: req.body.viewSkills,
         timerEnabled: req.body.timerEnabled,
+        multipleChoiceAnswer: "",
         blocked: [],
     };
 
     req.body.topics.forEach(topic => packet[topic] = []);
+
+    // todo: generate metadata associated with each question in the multiple choice section
 
     db.collection('sessions').add(packet).then((docRef) => {
         res.json({ success: true, sid: docRef.id });
@@ -470,6 +475,77 @@ router.post('/session', async function(req, res) {
         console.log(e);
         res.json({ success: false });
     });
+});
+
+// cache these results
+router.post('/getProgressReport', async function(req, res) {
+    const uid = req.body.uid;
+
+    const sessionRef = db.collection('sessions');
+    const questionRef = db.collection('questions');
+    const summaryRef = db.collection('summary');
+    const sessionSnapshot = await sessionRef.where('uid', '==', uid).get();
+
+    const questionIDs = {};
+    const questionInfo = {};
+
+    let refs = [];
+
+    const summary = await summaryRef.doc(uid).get();
+
+    if (!summary.exists) {
+        sessionSnapshot.forEach(doc => {
+            const data = doc.data();
+            
+            data.metadata.forEach(async question => {
+                const id = question.id;
+                
+                const questionSnapshot = questionRef.where('__name__', '==', id).select('type', 'topic', 'topics');
+                
+                // linear check
+                if (!questionIDs[id]) {
+                    refs.push(questionSnapshot);
+                    questionIDs[id] = true;
+                }
+            });
+        });
+
+        let processed = 0;
+
+        refs.forEach(async ref => {
+            const snapshot = await ref.get();
+            snapshot.forEach(item => {
+                processed += 1;
+                const data = item.data();
+                const type = data.type ? data.type : 'general';
+                const topics = type === 'general' ? data.topics : [data.topic];
+
+                topics.forEach(topic => {
+                    if (!questionInfo[topic]) {
+                        questionInfo[topic] = 1;
+                    } else {
+                        questionInfo[topic] += 1;
+                    }
+                });
+
+                if (processed === refs.length) {
+                    summaryRef.doc(uid).set(questionInfo).then((docRef) => {
+                        res.json({ success: true, msg: questionInfo });
+                    }).catch((e) => {
+                        console.log(e);
+                        res.json({ success: false });
+                    });
+                }
+            });
+        });
+    } else {
+        res.json({ success: true, msg: summary.data() });
+    }
+
+    // cache the results of the stats function too using FB function
+
+    // generate a report of the count of each question in the database along with the questions the
+    // user has answered based on the reports included in the progress summary
 });
 
 router.post('/report', async function (req, res) {
@@ -483,18 +559,39 @@ router.post('/report', async function (req, res) {
         console.log(e);
         res.json({ success: false });
     });
-
 });
 
-router.post('/blockPart', async function (req, res) {
+router.post('/completeTutorial', async function(req, res) {
+    const uid = req.body.uid;
+    const userRef = db.collection('users').doc(uid);
+    userRef.update({ tutorial: true }).then(() => res.json({ success: true })).catch(e => console.log(e));
+});
+
+router.post('/updateSession', async function(req, res) {
     const sid = req.body.sid;
-    const part = req.body.part;
+    const field = req.body.field;
+    const value = req.body.value;
+    const type = req.body.type;
+
+    let fieldValue; // (type === 'adjust') ? admin.firestore.FieldValue.increment(value) :
+
+    switch (type) {
+        case 'ADJUST':
+            fieldValue = admin.firestore.FieldValue.increment(value);
+            break;
+        case 'UNION':
+            fieldValue = admin.firestore.FieldValue.arrayUnion(value);
+            break;
+        default:
+            fieldValue = value;
+            break;
+    }
+    
     const sessionRef = db.collection('sessions').doc(sid);
 
-    packet = { blocked: admin.firestore.FieldValue.arrayUnion(part) };
-    sessionRef.update(packet).then(() => {
-        res.json({ success: true });
-    }).catch((e) => { console.log('Block', e); res.json({ success: false }); });
+    const packet = { [field]: fieldValue };
+
+    sessionRef.update(packet).then(() => res.json({ success: true }) ).catch((e) => { console.log('Block', e); res.json({ success: false }); });
 });
 
 // FETCH QUESTION ROUTE:
@@ -538,36 +635,57 @@ router.post('/question', async function(req, res) {
 
         // Update the session based on the previously recorded question and answer
         if (prevQuestionID.length > 0 || currentQuestion.length === 0) {
-            console.log('Updating Session!');
+            console.log('Updating Session: ', sid);
             
             // Select a topic at random from the choices
             const topic = topics[Math.floor(Math.random() * topics.length)];
             const previousQuestions = sessionData[topic]; // holds an array of each possible topic containing question ids
 
+            console.log(sessionData[topic], topic, sid);
+
             // Query the main database for a question based on topic
             // .where('__name__', 'not-in', previousQuestions).
 
-            let questionSnapshot;
+            let questionSnapshot; //  = await questionRef.where('type', '==', 'multiple').get();
 
             if (previousQuestions.length === 0) {
-                questionSnapshot = await questionRef.where('topics', 'array-contains', topic).get();
+                if (sessionData.type === 'multiple') {
+                    questionSnapshot = questionRef.where('topic', '==', topic);
+                } else {
+                    questionSnapshot = questionRef.where('topics', 'array-contains', topic);
+                }
             } else {
-                questionSnapshot = await questionRef.where('topics', 'array-contains', topic).where('__name__', 'not-in', previousQuestions).get();
+                if (sessionData.type === 'multiple') {
+                    questionSnapshot = questionRef.where('topic', '==', topic).where('__name__', 'not-in', previousQuestions);
+                } else {
+                    questionSnapshot = questionRef.where('topics', 'array-contains', topic).where('__name__', 'not-in', previousQuestions);
+                }
             }
+
+            if (sessionData.type === 'multiple') {
+                questionSnapshot = questionSnapshot.where('type', '==', 'multiple');
+            }
+
+            questionSnapshot = await questionSnapshot.get();
 
             const questionCandidates = [];
 
             // fetching a new question from the bank
             questionSnapshot.forEach(doc => {
+                const data = doc.data();
+                const type = data.type;
+
                 questionCandidates.push({
-                    data: doc.data(), // need to filter out the parts not relevant to the session
+                    data, // need to filter out the parts not relevant to the session
                     questionID: doc.id,
+                    type: type ? type : 'general',
                     progress,
-                    remainingHearts: 3,
+                    remainingHearts: type ? (type === 'multiple' ? 1 : 3) : 3,
                     viewSkills: sessionData.viewSkills,
                     timerEnabled: sessionData.timerEnabled,
                     blocked: [],
                     fullTopics: sessionData.topics,
+                    example: sessionData.example !== undefined
                 });
             });
 
@@ -576,7 +694,8 @@ router.post('/question', async function(req, res) {
 
             let packet = {
                 currentQuestion: selectedQuestion.questionID,
-                remainingHearts: 3,
+                remainingHearts: selectedQuestion.type === 'general' ? 3 : 1,
+                multipleChoiceAnswer: '',
                 blocked: []
             };
 
@@ -586,34 +705,52 @@ router.post('/question', async function(req, res) {
             if (prevQuestionID) {
                 const prevQuestion = await questionRef.doc(prevQuestionID).get();
                 const prevQuestionData = prevQuestion.data();
-                const parts = prevQuestionData.parts;
+                const prevQuestionType = prevQuestionData.type ? prevQuestionData.type : 'general';
+                
+                if (prevQuestionType === 'multiple') {
+                    packet = {
+                        ...packet,
+                        [prevQuestionData.topic]: admin.firestore.FieldValue.arrayUnion(prevQuestionID),
+                    }; 
+                } else if (prevQuestionType === 'general')  {
+                    prevQuestionData.topics.forEach(topic => packet[topic] = admin.firestore.FieldValue.arrayUnion(prevQuestionID));
+                }
 
-                prevAnswers.forEach(answer => {
-                    const marks = answer.marks;
-                    const part = answer.part;
-                    const answered = (parts[part].answered) ? parts[part].answered : 0;
-                    const currentAvg = (parts[part].average) ? parts[part].average : 0;
+                if (prevQuestionType === 'general') {
+                    const parts = prevQuestionData.parts;
+                    
+                    // determine the statistical relevance of the question answered
+                    prevAnswers.forEach(answer => {
+                        const marks = answer.marks;
+                        const part = answer.part;
+                        const answered = (parts[part].answered) ? parts[part].answered : 0;
+                        const currentAvg = (parts[part].average) ? parts[part].average : 0;
 
-                    // potential that people could destroy the average lol
+                        // potential that people could destroy the average lol
 
-                    const answeredField = 'parts.' + part + '.answered';
-                    const averageField = 'parts.' + part + '.average';
+                        const answeredField = 'parts.' + part + '.answered';
+                        const averageField = 'parts.' + part + '.average';
 
-                    console.log('Setting the average of:', prevQuestionID);
+                        console.log('Setting the average of:', prevQuestionID);
 
+                        questionRef.doc(prevQuestionID).update({
+                            [answeredField]: answered + 1,
+                            [averageField]: ((currentAvg * answered) + marks) / (answered + 1)
+                        }).catch((e) => { console.log(e) });
+                    });
+                } else if (prevQuestionType === 'multiple') {
                     questionRef.doc(prevQuestionID).update({
-                        [answeredField]: answered + 1,
-                        [averageField]: ((currentAvg * answered) + marks) / (answered + 1)
+                        answered: 1, // answered + 1,
+                        average: 1 // ((currentAvg * answered) + marks) / (answered + 1)
                     }).catch((e) => { console.log(e) });
-
-                    userRef.update({ lastQuestion:  admin.firestore.FieldValue.serverTimestamp() }).catch((e) => { console.log(e) });
-                });
+                }
 
                 packet = {
                     ...packet,
-                    [topic]: admin.firestore.FieldValue.arrayUnion(prevQuestionID),
                     metadata: admin.firestore.FieldValue.arrayUnion({ aid:uuidv4(), id:prevQuestionID, answers:prevAnswers, stats:prevStats })
                 };
+
+                userRef.update({ lastQuestion:  admin.firestore.FieldValue.serverTimestamp() }).catch((e) => { console.log(e) });
             }
             
             // if the update fails, we might decrement the hearts below 0
@@ -630,13 +767,19 @@ router.post('/question', async function(req, res) {
             selectedQuestion = { 
                 data: question.data(),
                 progress,
+                type: question.data().type ? question.data().type : 'general',
                 questionID: sessionData.currentQuestion,
+                questionType: sessionData.type,
                 remainingHearts: sessionData.remainingHearts,
                 viewSkills: sessionData.viewSkills,
                 timerEnabled: sessionData.timerEnabled,
                 blocked: sessionData.blocked,
                 fullTopics: sessionData.topics,
+                example: sessionData.example !== undefined,
+                multipleChoiceAnswer: sessionData.multipleChoiceAnswer ? sessionData.multipleChoiceAnswer : ''
             };
+
+            console.log(sid);
 
             res.json({ success: true, msg: selectedQuestion });
         }
