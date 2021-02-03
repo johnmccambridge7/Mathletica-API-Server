@@ -167,7 +167,7 @@ router.get('/stats', async function (req, res) {
         let count = 0;
         querySnapshot.forEach((doc) => {
             questionData = doc.data();
-            
+
             if (questionData.topics) {
                 questionData.topics.forEach(topic => {
                     if (stats[topic]) {
@@ -177,8 +177,17 @@ router.get('/stats', async function (req, res) {
                     }
                 });
             } else {
-                stats[questionData.topic] += 1;
+                if (stats[questionData.topic]) {
+                    stats[questionData.topic] += 1;
+                } else {
+                    stats[questionData.topic] = 1;
+                }
             }
+
+            if (Object.keys(questionData).length < 8) {
+                console.log(questionData, doc.id);
+            }
+            //}
             
             count += 1;
         })
@@ -636,9 +645,18 @@ router.post('/question', async function(req, res) {
         // Update the session based on the previously recorded question and answer
         if (prevQuestionID.length > 0 || currentQuestion.length === 0) {
             console.log('Updating Session: ', sid);
-            
-            // Select a topic at random from the choices
-            const topic = topics[Math.floor(Math.random() * topics.length)];
+
+            let minimumBucket = "";
+            let minimumSize = 1000;
+
+            sessionData.topics.forEach(topic => {
+                if (sessionData[topic].length < minimumSize) {
+                    minimumSize = sessionData[topic].length;
+                    minimumBucket = topic;
+                }
+            });
+
+            const topic = minimumBucket;
             const previousQuestions = sessionData[topic]; // holds an array of each possible topic containing question ids
 
             console.log(sessionData[topic], topic, sid);
@@ -646,8 +664,7 @@ router.post('/question', async function(req, res) {
             // Query the main database for a question based on topic
             // .where('__name__', 'not-in', previousQuestions).
 
-            let questionSnapshot; //  = await questionRef.where('type', '==', 'multiple').get();
-
+            let questionSnapshot; 
             if (previousQuestions.length === 0) {
                 if (sessionData.type === 'multiple') {
                     questionSnapshot = questionRef.where('topic', '==', topic);
@@ -691,6 +708,8 @@ router.post('/question', async function(req, res) {
 
             const position = Math.floor(Math.random() * questionCandidates.length);
             selectedQuestion = questionCandidates[position];
+
+            // selected question is now returning null
 
             let packet = {
                 currentQuestion: selectedQuestion.questionID,
