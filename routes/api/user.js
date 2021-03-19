@@ -1,12 +1,14 @@
 var express = require('express');
 var router = express.Router();
-var { db, admin } = require('../../models/firebase');
+var { db, firebase, admin } = require('../../models/firebase');
 
 router.post('/register', function (req, res) {
     const email = req.body.email;
     const password = req.body.password;
     const firstName = req.body.firstName;
     const lastName = req.body.lastName;
+    const school = req.body.school;
+
     firebase.auth().createUserWithEmailAndPassword(email, password).then((user) => {
         const usersRef = db.collection('users');
 
@@ -14,8 +16,8 @@ router.post('/register', function (req, res) {
             email,
             firstName,
             lastName,
+            school,
             points: 0,
-            school: 'Plockton',
             prevLocalRanking: 10000,
             prevGlobalRanking: 10000,
             tutorial: false,
