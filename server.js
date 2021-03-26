@@ -5,7 +5,7 @@ var bodyParser = require('body-parser');
 const cors = require('cors');
 
 app.use(cors({
-    origin: 'http://localhost:3000' // 'https://mathletica.co.uk'
+    origin: 'https://mathletica.co.uk'
 }));
 
 app.use(function(req, res, next) {

@@ -214,7 +214,6 @@ router.post('/getProgressReport', async function(req, res) {
     }
 
     // cache the results of the stats function too using FB function
-
     // generate a report of the count of each question in the database along with the questions the
     // user has answered based on the reports included in the progress summary
 });
