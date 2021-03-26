@@ -3,7 +3,7 @@ var { db, admin } = require('../models/firebase');
 
 async function getRanking(uid, userData, scope) {
     const usersRef = db.collection('users');
-
+    
     let usersSnapshot;
 
     if (scope === 'local') {
@@ -37,6 +37,9 @@ async function getRanking(uid, userData, scope) {
         points.push([0, Math.log(10000)]);
     });
 
+    if (userData.points === 0) {
+        return { users, ranking: (scope === 'global') ? userData.prevGlobalRanking : userData.prevLocalRanking, school: userData.school, prevRanking: (scope === 'global') ? userData.prevGlobalRanking : userData.prevLocalRanking };
+    }
 
     if (!userContained) {
         // use linear regression to build exponential model to predict ranking

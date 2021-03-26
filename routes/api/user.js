@@ -18,8 +18,8 @@ router.post('/register', function (req, res) {
             lastName,
             school,
             points: 0,
-            prevLocalRanking: 10000,
-            prevGlobalRanking: 10000,
+            prevLocalRanking: 50 - Math.floor(Math.random() * (10 - 5 + 1)) + 5,
+            prevGlobalRanking: 10000 - Math.floor(Math.random() * (250 - 45 + 1)) + 45,
             tutorial: false,
             performance: {
                 Circles: 0,
